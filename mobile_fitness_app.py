@@ -121,6 +121,7 @@ class FitnessTransformer(VideoTransformerBase):
             min_detection_confidence=0.5,
             min_tracking_confidence=0.7,
             model_complexity=2,
+            model_complexity_model_path="./models/pose_landmark_heavy.tflite"
         )
 
     def recv(self, frame):
