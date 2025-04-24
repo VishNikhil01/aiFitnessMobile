@@ -7,6 +7,6 @@ mediapipe
 pygame
 torch
 opencv-python-headless
-
+ultralytics
 
 #ipykernel
