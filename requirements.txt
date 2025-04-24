@@ -5,7 +5,7 @@ streamlit
 mediapipe
 pygame
 torch
-cv2
+opencv-python
 pickle
 streamlit_webrtc
 datatime
