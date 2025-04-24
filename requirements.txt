@@ -5,4 +5,10 @@ streamlit
 mediapipe
 pygame
 torch
+cv2
+pickle
+streamlit_webrtc
+datatime
+time
+random
 #ipykernel
