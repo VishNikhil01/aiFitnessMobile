@@ -1,4 +1,6 @@
-numpy
+numpy>=1.24.0
+opencv-contrib-python-headless==4.8.1.78
+opencv-python-headless
 pandas
 scikit-learn
 streamlit
@@ -7,7 +9,6 @@ mediapipe
 pygame
 torch
 ultralytics
-
 
 
 #ipykernel
