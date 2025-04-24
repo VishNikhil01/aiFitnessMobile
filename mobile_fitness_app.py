@@ -12,6 +12,15 @@ import av
 from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 import mediapipe as mp
 
+
+mp_dir = os.path.dirname(mp.__file__)
+heavy_file = os.path.join(mp_dir, "modules/pose_landmark/pose_landmark_heavy.tflite")
+if os.path.exists(heavy_file):
+    try:
+        os.chmod(heavy_file, 0o444)
+    except PermissionError:
+        pass
+
 # ─── Suppress FutureWarnings ─────────────────────────────────────────────────
 warnings.filterwarnings("ignore", category=FutureWarning)
 
@@ -67,6 +76,8 @@ def calculateAngle(a, b, c):
 def detect_objects(frame):
     results = yolo_model(frame)
     return results.pred[0]
+
+
 
 # ─── Feedback Options ─────────────────────────────────────────────────────────
 FEEDBACK_OPTIONS = {
