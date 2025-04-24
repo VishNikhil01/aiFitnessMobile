@@ -2,13 +2,10 @@ pandas
 numpy
 scikit-learn
 streamlit
+streamlit-webrtc
 mediapipe
 pygame
 torch
 opencv-python
-pickle
-streamlit_webrtc
-datatime
-time
-random
+
 #ipykernel
