@@ -6,6 +6,7 @@ streamlit-webrtc
 mediapipe
 pygame
 torch
-opencv-python
+opencv-python-headless
+
 
 #ipykernel
