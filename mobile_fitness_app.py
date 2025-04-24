@@ -15,16 +15,7 @@ import mediapipe as mp
 # ─── Suppress FutureWarnings ─────────────────────────────────────────────────
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-# ─── Fix Mediapipe Heavy Model Permission on Streamlit Cloud ────────────────
-mp_dir = os.path.dirname(mp.__file__)
-heavy_model = os.path.join(mp_dir, "modules", "pose_landmark", "pose_landmark_heavy.tflite")
-if os.path.exists(heavy_model):
-    try:
-        os.chmod(heavy_model, 0o444)
-    except PermissionError:
-        pass  # Already readable or cannot change
-
-# ─── Streamlit Page Configuration ────────────────────────────────────────────
+# ─── Streamlit Page Config ────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Real-Time AI Fitness Posture Correction (Mobile)",
     layout="centered",
@@ -34,7 +25,7 @@ st.set_page_config(
 # ─── Sidebar Controls ─────────────────────────────────────────────────────────
 st.sidebar.title("Settings")
 enable_audio = st.sidebar.checkbox("Enable Audio Feedback", value=True)
-menu_selection = st.sidebar.selectbox("Select Exercise", ["Bench Press", "Squat", "Deadlift"])
+exercise = st.sidebar.selectbox("Select Exercise", ["Bench Press", "Squat", "Deadlift"])
 confidence_threshold = st.sidebar.slider("Landmark Tracking Confidence", 0.0, 1.0, 0.7)
 counter_display = st.sidebar.empty()
 
@@ -45,7 +36,7 @@ def load_yolo():
     model = torch.hub.load("ultralytics/yolov5", "custom", path=weights, force_reload=True)
     device = "mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device).eval()
-    st.sidebar.write(f"YOLO Running on: {device}")
+    st.sidebar.write(f"YOLO running on: {device}")
     return model
 
 yolo_model = load_yolo()
@@ -58,7 +49,7 @@ def load_posture_model():
         "Squat":       "models/squat/squat.pkl",
         "Deadlift":    "models/deadlift/deadlift.pkl",
     }
-    with open(paths[menu_selection], "rb") as f:
+    with open(paths[exercise], "rb") as f:
         return pickle.load(f)
 
 pose_classifier = load_posture_model()
@@ -74,7 +65,6 @@ def calculateAngle(a, b, c):
     return 360.0 - ang if ang > 180.0 else ang
 
 def detect_objects(frame):
-    # frame: HxWx3 BGR or RGB
     results = yolo_model(frame)
     return results.pred[0]
 
@@ -105,7 +95,7 @@ FEEDBACK_OPTIONS = {
     ],
 }
 
-# ─── Video Transformer Class for WebRTC ─────────────────────────────────────
+# ─── Video Transformer for WebRTC ────────────────────────────────────────────
 class FitnessTransformer(VideoTransformerBase):
     def __init__(self):
         self.counter = 0
@@ -113,12 +103,12 @@ class FitnessTransformer(VideoTransformerBase):
         self.status = []
         self.last_alert = 0
 
-        # Initialize MediaPipe Pose with complexity=2 (heavy model)
+        # MediaPipe Pose with complexity=1 (full model, not lite)
         self.mp_pose = mp.solutions.pose
         self.pose = self.mp_pose.Pose(
             min_detection_confidence=0.5,
             min_tracking_confidence=0.7,
-            model_complexity=2
+            model_complexity=1  # <-- full model, avoids heavy-file permission issues
         )
 
     def transform(self, frame: av.VideoFrame) -> np.ndarray:
@@ -129,7 +119,8 @@ class FitnessTransformer(VideoTransformerBase):
         if detections is not None:
             for det in detections:
                 x1, y1, x2, y2, conf = map(int, det[:5])
-                if conf < 0.7: continue
+                if conf < 0.7:
+                    continue
 
                 roi = img[y1:y2, x1:x2]
                 rgb = cv2.cvtColor(roi, cv2.COLOR_BGR2RGB)
@@ -138,7 +129,6 @@ class FitnessTransformer(VideoTransformerBase):
                     continue
 
                 lm = res.pose_landmarks.landmark
-                # Build feature vector
                 feats = [v for pt in lm for v in (pt.x, pt.y, pt.z, pt.visibility)]
                 df = pd.DataFrame([feats])
                 try:
@@ -153,7 +143,7 @@ class FitnessTransformer(VideoTransformerBase):
                 elif self.stage == "down" and "up" in pred:
                     self.stage = "up"
                     self.counter += 1
-                    counter_display.write(f"{menu_selection} Reps: {self.counter}")
+                    counter_display.write(f"{exercise} Reps: {self.counter}")
                     tag = most_frequent(self.status)
                     if tag != "correct":
                         now = time.time()
@@ -170,7 +160,7 @@ class FitnessTransformer(VideoTransformerBase):
                         st.audio("resources/sounds/correct.mp3")
                     self.status.clear()
 
-                # Draw Pose Landmarks
+                # Draw landmarks
                 for lm_id in self.mp_pose.PoseLandmark:
                     if lm[lm_id.value].visibility >= confidence_threshold:
                         mp.solutions.drawing_utils.draw_landmarks(
@@ -187,7 +177,7 @@ class FitnessTransformer(VideoTransformerBase):
 
 # ─── Launch WebRTC Stream ───────────────────────────────────────────────────
 st.title("🏋️ Real-Time AI Workout Form Correction (Mobile)")
-st.markdown("Open this page in Safari or Chrome on your phone and allow camera access.")
+st.markdown("Open this page in Safari (iOS) or Chrome (Android), allow camera access, and start your workout.")
 
 webrtc_streamer(
     key="fitness_app",
