@@ -20,54 +20,34 @@ st.set_page_config(
 # Load YOLOv5 model for person detection
 MODEL_WEIGHTS = "./models/best_big_bounding.pt"
 model = torch.hub.load("ultralytics/yolov5", "custom", path=MODEL_WEIGHTS)
-# Pick the best available device
-if torch.backends.mps.is_available():       
-    device = "mps"
-elif torch.cuda.is_available():
-    device = "cuda"
-else:
-    device = "cpu"
-
+device = "mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
 model.to(device)
 st.sidebar.write(f"Running on: {device}")
- # Use 'mps' on supported devices
 model.eval()
 
-# Utility: most frequent element
-
+# Utility function to find most frequent item in list
 def most_frequent(data):
     return max(data, key=data.count)
 
 # Compute angle between three points a-b-c
-
 def calculateAngle(a, b, c):
-    a = np.array(a)
-    b = np.array(b)
-    c = np.array(c)
-    radians = np.arctan2(c[1] - b[1], c[0] - b[0]) - \
-              np.arctan2(a[1] - b[1], a[0] - b[0])
+    a, b, c = np.array(a), np.array(b), np.array(c)
+    radians = np.arctan2(c[1]-b[1], c[0]-b[0]) - np.arctan2(a[1]-b[1], a[0]-b[0])
     angle = abs(radians * 180.0 / np.pi)
-    if angle > 180.0:
-        angle = 360.0 - angle
-    return angle
+    return 360.0 - angle if angle > 180.0 else angle
 
 # Perform YOLOv5 object detection on a frame
-
 def detect_objects(frame):
     results = model(frame)
     return results.pred[0]
 
 # Sidebar controls
 enable_audio = st.sidebar.checkbox("Enable Audio Feedback", value=True)
-menu_selection = st.sidebar.selectbox(
-    "Select Exercise", ("Bench Press", "Squat", "Deadlift")
-)
-counter_display = st.sidebar.empty()
-confidence_threshold = st.sidebar.slider(
-    "Landmark Tracking Confidence", min_value=0.0, max_value=1.0, value=0.7
-)
+menu_selection = st.sidebar.selectbox("Select Exercise", ("Bench Press", "Squat", "Deadlift"))
+counter_display = st.sidebar.empty()  # Moved here so it's accessible globally
+confidence_threshold = st.sidebar.slider("Landmark Tracking Confidence", 0.0, 1.0, 0.7)
 
-# Mapping of feedback messages and audio files for common posture issues
+# Feedback messages and audio paths
 FEEDBACK_OPTIONS = {
     "excessive_arch": [
         ("Avoid arching your lower back too much; keep it neutral.", "./resources/sounds/excessive_arch_1.mp3"),
@@ -94,19 +74,14 @@ FEEDBACK_OPTIONS = {
     ],
 }
 
-# Define video transformer for WebRTC streaming
+# Main video transformer
 class FitnessTransformer(VideoTransformerBase):
-    """
-    Video frame processor for real-time posture correction.
-    """
     def __init__(self):
-        # Rep counter and posture tracking
         self.counter = 0
         self.current_stage = ""
         self.posture_status = []
         self.previous_alert_time = 0
 
-        # Load exercise-specific classifier
         model_path = {
             "Bench Press": "./models/benchpress/benchpress.pkl",
             "Squat": "./models/squat/squat.pkl",
@@ -115,23 +90,13 @@ class FitnessTransformer(VideoTransformerBase):
         with open(model_path, "rb") as f:
             self.model_e = pickle.load(f)
 
-        # Initialize MediaPipe Pose
         self.mp_pose = mp.solutions.pose
-        self.pose = self.mp_pose.Pose(
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.7,
-            model_complexity=2,
-        )
+        self.pose = self.mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.7, model_complexity=2)
 
     def recv(self, frame):
-        """
-        Processes each video frame: detection, pose estimation,
-        angle computation, classification, counting, feedback.
-        """
         img = frame.to_ndarray(format="bgr24")
-        img = cv2.flip(img, 1)  # Mirror for user
+        img = cv2.flip(img, 1)
 
-        # Detect persons
         detections = detect_objects(img)
         for det in detections:
             c1, c2 = det[:2].int(), det[2:4].int()
@@ -143,17 +108,13 @@ class FitnessTransformer(VideoTransformerBase):
             x2, y2 = c2[0].item(), c2[1].item()
             person_frame = img[y1:y2, x1:x2]
 
-            # Pose estimation
             rgb = cv2.cvtColor(person_frame, cv2.COLOR_BGR2RGB)
             results_pose = self.pose.process(rgb)
             if not results_pose.pose_landmarks:
                 continue
             lm = results_pose.pose_landmarks.landmark
-
-            # Extract keypoints
             pts = {p.name: [lm[p].x, lm[p].y] for p in self.mp_pose.PoseLandmark}
 
-            # Calculate angles
             neck_angle = (
                 calculateAngle(pts['LEFT_SHOULDER'], pts['NOSE'], pts['LEFT_HIP']) +
                 calculateAngle(pts['RIGHT_SHOULDER'], pts['NOSE'], pts['RIGHT_HIP'])
@@ -171,12 +132,10 @@ class FitnessTransformer(VideoTransformerBase):
                 'right_ankle': calculateAngle(pts['RIGHT_KNEE'], pts['RIGHT_ANKLE'], pts['RIGHT_HEEL']),
             }
 
-            # Sidebar angle display on mobile
             st.sidebar.write(f"Neck Angle: {neck_angle:.2f}°")
             for name, value in angles.items():
                 st.sidebar.write(f"{name.replace('_',' ').title()} Angle: {value:.2f}°")
 
-            # Classification and counting
             try:
                 row = [coord for lm_pt in lm for coord in [lm_pt.x, lm_pt.y, lm_pt.z, lm_pt.visibility]]
                 X = pd.DataFrame([row])
@@ -191,14 +150,11 @@ class FitnessTransformer(VideoTransformerBase):
                     counter_display.write(f"Count: {self.counter}")
                     self.posture_status.append(exercise_class)
 
-                    # Provide feedback for incorrect posture
                     tag = most_frequent(self.posture_status)
                     if tag != "correct":
                         now = time.time()
                         if now - self.previous_alert_time >= 3:
-                            message, audio = random.choice(
-                                FEEDBACK_OPTIONS.get(tag, [("Adjust posture.", "")])
-                            )
+                            message, audio = random.choice(FEEDBACK_OPTIONS.get(tag, [("Adjust posture.", "")]))
                             st.error(message)
                             if enable_audio and audio:
                                 st.audio(audio)
@@ -212,7 +168,6 @@ class FitnessTransformer(VideoTransformerBase):
             except Exception:
                 pass
 
-            # Draw landmarks (optional debug overlay)
             for lm_id in self.mp_pose.PoseLandmark:
                 if lm[lm_id.value].visibility >= confidence_threshold:
                     mp.solutions.drawing_utils.draw_landmarks(
@@ -222,24 +177,13 @@ class FitnessTransformer(VideoTransformerBase):
                     )
             img[y1:y2, x1:x2] = person_frame
 
-        # Overlay rep count on final image
-        cv2.putText(
-            img,
-            f"Reps: {self.counter}",
-            (10, 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1,
-            (0, 255, 0),
-            2
-        )
+        cv2.putText(img, f"Reps: {self.counter}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
         return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-# Start WebRTC streamer for mobile browsers
+# Start the webcam stream
 webrtc_streamer(
     key="fitness-webrtc",
     video_transformer_factory=FitnessTransformer,
     media_stream_constraints={"video": True, "audio": False},
     async_transform=True,
 )
-
-# Note: Ensure camera permission is enabled in your Android/iPhone browser settings.
