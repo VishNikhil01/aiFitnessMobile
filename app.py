@@ -12,13 +12,13 @@ import torch
 import pickle
 import random
 
-# ─── Streamlit page config ───────────────────────────────────────────────────
+# Streamlit page config 
 st.set_page_config(
     page_title="Real-time Big Three Workout AI Posture Correction Service",
     layout="centered",
 )
 
-# ─── Load models ───────────────────────────────────────────────────────────────
+# Load models
 # YOLOv5
 YOLO_WEIGHTS = r"D:/ISL-MAJOR-PROJECT/models/best_big_bounding.pt"
 model = torch.hub.load("ultralytics/yolov5", "custom", path=YOLO_WEIGHTS)
@@ -31,7 +31,7 @@ def load_posture_model(pkl_path: str):
     with open(pkl_path, "rb") as f:
         return pickle.load(f)
 
-# ─── Utility functions ────────────────────────────────────────────────────────
+#Utility functions
 
 def most_frequent(data):
     return max(data, key=data.count)
@@ -52,7 +52,7 @@ def detect_objects(frame):
     results = model(frame)
     return results.pred[0]
 
-# ─── App UI ───────────────────────────────────────────────────────────────────
+# App UI 
 st.title("Real-time Big Three Workout AI Posture Correction Service")
 
 menu = st.sidebar.selectbox(
@@ -90,7 +90,7 @@ pose = mp_pose.Pose(
     model_complexity=2
 )
 
-# ─── Main camera loop ─────────────────────────────────────────────────────────
+#Main camera loop 
 def run_camera():
     global counter, current_stage, posture_status
     cap = cv2.VideoCapture(0)
@@ -236,6 +236,6 @@ def run_camera():
         FRAME_WINDOW.image(frame)
     cap.release()
 
-# ─── Entrypoint ───────────────────────────────────────────────────────────────
+#Entrypoint
 if __name__ == "__main__":
     run_camera()
