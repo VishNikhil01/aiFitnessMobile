@@ -28,6 +28,15 @@ try:
 except Exception:
     pass
 
+import torch
+_orig_loader = torch.load
+def _fallback_loader(f, *args, **kwargs):
+    try:
+        return _orig_loader(f, *args, **kwargs)
+    except ModuleNotFoundError:
+        return _orig_loader(f, map_location="cpu", weights_only=True)
+torch.load = _fallback_loader
+
 from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 
 # ─── Use ultralytics instead of torch.hub ─────────────────────────────────────
