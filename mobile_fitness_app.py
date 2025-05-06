@@ -108,10 +108,11 @@ class Transformer(VideoTransformerBase):
         self.last_alert = 0.0
 
         self.mp_pose = mp.solutions.pose
+        # Use the light model so no download is attempted
         self.pose = self.mp_pose.Pose(
             min_detection_confidence=0.5,
             min_tracking_confidence=0.7,
-            model_complexity=2
+            model_complexity=0
         )
 
     def recv(self, frame):
@@ -219,11 +220,10 @@ class Transformer(VideoTransformerBase):
 st.markdown("**Allow camera access. Uses back-facing camera on mobile.**")
 webrtc_streamer(
     key="app",
-    video_transformer_factory=Transformer,
+    video_processor_factory=Transformer,   # updated parameter name
     media_stream_constraints={
         "video": {"facingMode": {"exact": "environment"}},
         "audio": False
     },
-    async_transform=True,
+    async_processing=True                # updated parameter name
 )
-
