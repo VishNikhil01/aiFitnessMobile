@@ -12,12 +12,23 @@ import cv2
 import streamlit as st
 import numpy as np
 import pandas as pd
-import mediapipe as mp
 import time
 import pygame
 import torch
 import pickle
 import random
+
+# ─── Disable Mediapipe’s OSS model downloader to avoid PermissionErrors ────────
+import mediapipe as mp
+try:
+    # Stop the downloader from trying to write .tflite into site-packages
+    import mediapipe.python.solutions.download_utils as _dl
+    _dl.download_oss_model = lambda *args, **kwargs: None
+    # Also override the pose‐specific downloader hook
+    import mediapipe.python.solutions.pose as _pose_module
+    _pose_module._download_oss_pose_landmark_model = lambda complexity: None
+except Exception:
+    pass
 
 from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 
@@ -70,7 +81,7 @@ def most_frequent(lst):
 
 def calculateAngle(a, b, c):
     a, b, c = np.array(a), np.array(b), np.array(c)
-    rad = np.arctan2(c[1]-b[1], c[0]-b[0]) - np.arctan2(a[1]-b[1], a[0]-b[0])
+    rad = np.arctan2(c[1] - b[1], c[0] - b[0]) - np.arctan2(a[1] - b[1], a[0] - b[0])
     deg = abs(rad * 180.0 / np.pi)
     return 360 - deg if deg > 180 else deg
 
@@ -108,7 +119,7 @@ class Transformer(VideoTransformerBase):
         self.last_alert = 0.0
 
         self.mp_pose = mp.solutions.pose
-        # Use the light model so no download is attempted
+        # Use the light model so no external downloads are needed
         self.pose = self.mp_pose.Pose(
             min_detection_confidence=0.5,
             min_tracking_confidence=0.7,
@@ -220,10 +231,10 @@ class Transformer(VideoTransformerBase):
 st.markdown("**Allow camera access. Uses back-facing camera on mobile.**")
 webrtc_streamer(
     key="app",
-    video_processor_factory=Transformer,   # updated parameter name
+    video_processor_factory=Transformer,
     media_stream_constraints={
         "video": {"facingMode": {"exact": "environment"}},
         "audio": False
     },
-    async_processing=True                # updated parameter name
+    async_processing=True
 )
