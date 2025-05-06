@@ -36,9 +36,7 @@ from ultralytics import YOLO
 
 @st.cache_resource
 def load_yolo():
-    # loads only from local file—no network calls
-    model = YOLO("models/best_big_bounding.pt")
-    return model
+    return YOLO("models/best_big_bounding.pt")
 
 yolo = load_yolo()
 
